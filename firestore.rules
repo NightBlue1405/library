@@ -1,0 +1,38 @@
+// firestore.rules
+// Deploy with: firebase deploy --only firestore:rules
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users collection — anyone authenticated can read; only you write your own
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Chat rooms — only participants can read/write
+    match /chatRooms/{roomId} {
+      // A room ID is uid1_uid2 (sorted). Both participants are allowed.
+      allow read, write: if request.auth != null
+        && request.auth.uid in roomId.split('_');
+
+      match /messages/{msgId} {
+        allow read: if request.auth != null
+          && request.auth.uid in roomId.split('_');
+
+        // Only the sender can create a message
+        allow create: if request.auth != null
+          && request.auth.uid == request.resource.data.senderId
+          && request.auth.uid in roomId.split('_');
+
+        // Both participants can update (for read receipts, ephemeral flags)
+        allow update: if request.auth != null
+          && request.auth.uid in roomId.split('_');
+
+        // No client-side hard deletes — we use soft delete (deleted: true)
+        allow delete: if false;
+      }
+    }
+  }
+}
